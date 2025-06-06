@@ -1,0 +1,204 @@
+#!/bin/bash
+
+###############################################################################
+# 16S rRNA Gene Amplicon Analysis Pipeline
+# Author: Ibeth Gonzalez
+# Version: QIIME 2 (2023.9) + Cutadapt
+# Description: This pipeline processes raw 16S paired-end FASTQ files through 
+# demultiplexing, denoising, taxonomic classification, and table collapsing.
+#
+# Requirements:
+# - Conda environments for Cutadapt and QIIME2-amplicon-2023.9
+# - Input FASTQ files named: Lib001_R1.fastq and Lib001_R2.fastq
+# - Barcode FASTA files: barcodes_fwd.fasta and barcodes_rev.fasta
+# - Metadata file: sample-metadata-16S.tsv
+# - Classifier: silva-138-99-nb-classifier.qza (or custom)
+#
+# Usage:
+# $ bash 16S_pipeline.sh
+#
+# Notes:
+# - Adapt the script if your filenames, primers, or classifiers differ.
+# - Assumes working directory contains all required input files.
+###############################################################################
+
+# Exit script on any error or use of unset variables
+set -euo pipefail
+
+#------------------------------#
+# 1. FILE PREPARATION
+#------------------------------#
+
+echo ">>> Preparing raw FASTQ files..."
+mv Lib001_R1.fastq input.1.fastq
+mv Lib001_R2.fastq input.2.fastq
+gzip input.1.fastq
+gzip input.2.fastq
+
+#------------------------------#
+# 2. DEMULTIPLEXING WITH CUTADAPT
+#------------------------------#
+
+echo ">>> Running Cutadapt for demultiplexing..."
+conda activate cutadapt
+
+cutadapt \
+  -e 0 --no-indels \
+  -g ^file:barcodes_fwd.fasta \
+  -G ^file:barcodes_rev.fasta \
+  -o {name1}-{name2}.1.fastq.gz -p {name1}-{name2}.2.fastq.gz \
+  input.1.fastq.gz input.2.fastq.gz --discard-untrimmed
+
+#------------------------------#
+# 3. IMPORTING AND SUMMARIZING DATA IN QIIME2
+#------------------------------#
+
+echo ">>> Importing data into QIIME2..."
+conda activate qiime2-amplicon-2023.9
+
+qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path casava_ibalej \
+  --input-format CasavaOneEightSingleLanePerSampleDirFmt \
+  --output-path demux-paired-end.qza
+
+qiime demux summarize \
+  --i-data demux-paired-end.qza \
+  --o-visualization demux-paired-end.qzv
+
+#------------------------------#
+# 4. DENOISING WITH DADA2
+#------------------------------#
+
+echo ">>> Running DADA2 denoising..."
+qiime dada2 denoise-paired \
+  --i-demultiplexed-seqs demux-paired-end.qza \
+  --p-trim-left-f 19 \
+  --p-trim-left-r 20 \
+  --p-trunc-len-f 270 \
+  --p-trunc-len-r 240 \
+  --o-table table.qza \
+  --o-representative-sequences rep-seqs.qza \
+  --o-denoising-stats denoising-stats.qza
+
+qiime feature-table summarize \
+  --i-table table.qza \
+  --o-visualization table.qzv \
+  --m-sample-metadata-file sample-metadata-16S.tsv
+
+qiime feature-table tabulate-seqs \
+  --i-data rep-seqs.qza \
+  --o-visualization rep-seqs.qzv
+
+qiime metadata tabulate \
+  --m-input-file denoising-stats.qza \
+  --o-visualization denoising-stats.qzv
+
+#------------------------------#
+# 5. TAXONOMIC CLASSIFICATION
+#------------------------------#
+
+echo ">>> Performing taxonomic classification..."
+qiime feature-classifier classify-sklearn \
+  --i-classifier silva-138-99-nb-classifier.qza \
+  --i-reads rep-seqs.qza \
+  --o-classification taxonomy.qza
+
+qiime metadata tabulate \
+  --m-input-file taxonomy.qza \
+  --o-visualization taxonomy.qzv
+
+#------------------------------#
+# 6. FILTER MITOCHONDRIA & CHLOROPLAST
+#------------------------------#
+
+echo ">>> Filtering mitochondria and chloroplast..."
+qiime taxa filter-table \
+  --i-table table.qza \
+  --i-taxonomy taxonomy.qza \
+  --p-exclude mitochondria,chloroplast \
+  --o-filtered-table table-no-mito-no-chloro.qza
+
+qiime taxa barplot \
+  --i-table table-no-mito-no-chloro.qza \
+  --i-taxonomy taxonomy.qza \
+  --m-metadata-file sample-metadata-16S.tsv \
+  --o-visualization taxa-bar-plots.qzv
+
+#------------------------------#
+# 7. EXPORT AND TRANSPOSE TABLE
+#------------------------------#
+
+echo ">>> Transposing and exporting feature table..."
+qiime feature-table transpose \
+  --i-table table-no-mito-no-chloro.qza \
+  --o-transposed-feature-table transposed-table.qza
+
+qiime tools export \
+  --input-path transposed-table.qza \
+  --output-path merged-data
+
+#------------------------------#
+# 8. COLLAPSE TABLE BY TAXONOMIC LEVELS
+#------------------------------#
+
+echo ">>> Collapsing table by taxonomic levels..."
+for level in {2..7}; do
+  echo "Collapsing at taxonomic level $level..."
+  
+  qiime taxa collapse \
+    --i-table table-no-mito-no-chloro.qza \
+    --i-taxonomy taxonomy.qza \
+    --p-level $level \
+    --o-collapsed-table table-collapsed-level$level.qza
+
+  qiime tools export \
+    --input-path table-collapsed-level$level.qza \
+    --output-path table-collapsed-level$level
+
+  biom convert \
+    -i table-collapsed-level$level/feature-table.biom \
+    -o table-collapsed-level$level/feature-table.tsv \
+    --to-tsv
+done
+
+#------------------------------#
+# 9. OPTIONAL: TRAIN CUSTOM CLASSIFIER
+#------------------------------#
+
+# echo ">>> (Optional) Training custom classifier..."
+
+# mkdir -p training-feature-classifiers
+# cd training-feature-classifiers
+
+# qiime tools import \
+#   --type 'FeatureData[Sequence]' \
+#   --input-path 99_otus_16S.fasta \
+#   --output-path species_taxid.qza
+
+# qiime tools import \
+#   --type 'FeatureData[Taxonomy]' \
+#   --input-format HeaderlessTSVTaxonomyFormat \
+#   --input-path majority_taxonomy_7_levels.txt \
+#   --output-path ref-taxonomy.qza
+
+# qiime feature-classifier extract-reads \
+#   --i-sequences species_taxid.qza \
+#   --p-f-primer GTGCCAGCMGCCGCGGTAA \
+#   --p-r-primer GGACTACHVGGGTWTCTAAT \
+#   --p-min-length 100 \
+#   --p-max-length 400 \
+#   --o-reads ref-seqs.qza
+
+# qiime feature-classifier fit-classifier-naive-bayes \
+#   --i-reference-reads ref-seqs.qza \
+#   --i-reference-taxonomy ref-taxonomy.qza \
+#   --o-classifier classifier_16Sv4.qza
+
+# cd ..
+
+#------------------------------#
+# END OF PIPELINE
+#------------------------------#
+
+echo ">>> Pipeline completed successfully!"
