@@ -27,3 +27,6 @@ To create the environment with Conda:
 
 conda activate
 conda activate qiime2-amplicon-2023.9
+
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15611455.svg)](https://doi.org/10.5281/zenodo.15611455)
