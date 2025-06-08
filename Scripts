@@ -2,12 +2,12 @@
 
 ###############################################################################
 # 16S-v4 rRNA Gene Amplicon Analysis Pipeline
-# Version: QIIME 2 (2023.9) + Cutadapt
+# Version: QIIME 2 (2023.9) + Cutadapt 4.7
 # Description: This pipeline processes raw 16S paired-end FASTQ files through 
 # demultiplexing, denoising, taxonomic classification, and table collapsing.
 #
 # Requirements:
-# - Conda environments for Cutadapt and QIIME2-amplicon-2023.9
+# - Conda environments for Cutadapt 4.7 and QIIME2-amplicon-2023.9
 # - Input FASTQ files named: Lib001_R1.fastq and Lib001_R2.fastq
 # - Barcode FASTA files: barcodes_fwd.fasta and barcodes_rev.fasta
 # - Metadata file: sample-metadata-16S.tsv
