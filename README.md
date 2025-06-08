@@ -1,7 +1,7 @@
-# This pipeline is based on the official QIIME 2 scripts (https://docs.qiime2.org/), with a custom workflow adapted to personal analysis needs.
-# QIIME 2 is licensed under the BSD 3-Clause License.
-# This repository is not officially affiliated with QIIME 2.
-# 16S-v4-Metabarcoding
+ This pipeline is based on the official QIIME 2 scripts (https://docs.qiime2.org/), with a custom workflow adapted to personal analysis needs.
+ QIIME 2 is licensed under the BSD 3-Clause License.
+ This repository is not officially affiliated with QIIME 2.
+ 16S-v4-Metabarcoding
 # Microbiota in Headwater Stream Biofilms - Analysis with QIIME2
 
 #This repository contains all the scripts, metadata, and files required to reproduce the microbial diversity analysis based on the 16S rRNA gene, performed using QIIME2.
