@@ -1,8 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# 16S rRNA Gene Amplicon Analysis Pipeline
-# Author: Ibeth Gonzalez
+# 16S-v4 rRNA Gene Amplicon Analysis Pipeline
 # Version: QIIME 2 (2023.9) + Cutadapt
 # Description: This pipeline processes raw 16S paired-end FASTQ files through 
 # demultiplexing, denoising, taxonomic classification, and table collapsing.
